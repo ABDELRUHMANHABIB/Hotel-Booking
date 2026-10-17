@@ -9,14 +9,22 @@ import { roomCatalog } from "./roomCatalog.js";
 import { offerCatalog } from "./offerCatalog.js";
 
 const port = Number(process.env.API_PORT || 4242);
-const defaultAppUrl = process.env.VERCEL_URL
+const productionAppUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "";
+const deploymentAppUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:5173";
+  : "";
+const defaultAppUrl = productionAppUrl || deploymentAppUrl || "http://localhost:5173";
 const publicAppUrl = (process.env.PUBLIC_APP_URL || defaultAppUrl).replace(
   /\/$/,
   "",
 );
-const publicAppOrigin = new URL(publicAppUrl).origin;
+const allowedAppOrigins = new Set(
+  [publicAppUrl, productionAppUrl, deploymentAppUrl]
+    .filter(Boolean)
+    .map((appUrl) => new URL(appUrl).origin),
+);
 const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -458,7 +466,7 @@ const parseDate = (value) => {
 };
 
 const isAllowedOrigin = (origin) => {
-  if (!origin || origin === publicAppOrigin) return true;
+  if (!origin || allowedAppOrigins.has(origin)) return true;
   if (process.env.NODE_ENV === "production") return false;
 
   try {
