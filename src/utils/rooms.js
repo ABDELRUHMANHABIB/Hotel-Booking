@@ -1,5 +1,5 @@
 import { roomImages, roomsDummyData } from "../assets/assets";
-import { isStaticDemo, readApiResponse } from "./api";
+import { apiUrl, isStaticDemo, readApiResponse } from "./api";
 
 export const toRoomViewModel = (room) => {
   const imageIndex = Number.isInteger(room.imageIndex) ? room.imageIndex : 0;
@@ -30,7 +30,7 @@ export const fetchRooms = async (options = {}) => {
       .map(toRoomViewModel);
   }
 
-  const response = await fetch("/api/rooms", options);
+  const response = await fetch(apiUrl("/api/rooms"), options);
   const result = await readApiResponse(response);
   if (!Array.isArray(result.rooms)) {
     throw new Error("The server returned invalid room data.");

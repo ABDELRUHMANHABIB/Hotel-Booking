@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { readApiResponse } from "../utils/api";
+import { apiUrl, readApiResponse } from "../utils/api";
 
 function BookingResult() {
   const [searchParams] = useSearchParams();
@@ -19,7 +19,7 @@ function BookingResult() {
 
     const controller = new AbortController();
     fetch(
-      `/api/checkout-session?session_id=${encodeURIComponent(sessionId)}`,
+      apiUrl(`/api/checkout-session?session_id=${encodeURIComponent(sessionId)}`),
       { signal: controller.signal },
     )
       .then(readApiResponse)

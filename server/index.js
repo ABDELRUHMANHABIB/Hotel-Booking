@@ -2,16 +2,22 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { neon } from "@neondatabase/serverless";
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import Stripe from "stripe";
 import { roomCatalog } from "./roomCatalog.js";
 import { offerCatalog } from "./offerCatalog.js";
 
 const port = Number(process.env.API_PORT || 4242);
-const publicAppUrl = (process.env.PUBLIC_APP_URL || "http://localhost:5173").replace(
+const defaultAppUrl = process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : "http://localhost:5173";
+const publicAppUrl = (process.env.PUBLIC_APP_URL || defaultAppUrl).replace(
   /\/$/,
   "",
 );
+const publicAppOrigin = new URL(publicAppUrl).origin;
+const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const clerkSecretKey = process.env.CLERK_SECRET_KEY;
@@ -36,6 +42,44 @@ let bookingWriteQueue = Promise.resolve();
 let subscriberWriteQueue = Promise.resolve();
 let roomWriteQueue = Promise.resolve();
 let roomInitialization;
+let databaseInitialization;
+
+const ensureDatabase = async () => {
+  if (!sql) return;
+  if (!databaseInitialization) {
+    databaseInitialization = (async () => {
+      await sql`CREATE TABLE IF NOT EXISTS quickstay_rooms (
+        id text PRIMARY KEY,
+        position integer NOT NULL,
+        room_data jsonb NOT NULL
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS quickstay_bookings (
+        checkout_session_id text PRIMARY KEY,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        booking_data jsonb NOT NULL
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS quickstay_subscribers (
+        email text PRIMARY KEY,
+        subscribed_at timestamptz NOT NULL DEFAULT now()
+      )`;
+      for (const [position, [_id, room]] of Object.entries(roomCatalog).entries()) {
+        const roomData = {
+          _id,
+          ...room,
+          isAvailable: true,
+          isListed: true,
+        };
+        await sql`INSERT INTO quickstay_rooms (id, position, room_data)
+          VALUES (${_id}, ${position}, ${JSON.stringify(roomData)}::jsonb)
+          ON CONFLICT (id) DO NOTHING`;
+      }
+    })().catch((error) => {
+      databaseInitialization = undefined;
+      throw error;
+    });
+  }
+  await databaseInitialization;
+};
 
 const sendJson = (response, status, body) => {
   response.writeHead(status, {
@@ -64,6 +108,11 @@ const readBody = (request) =>
   });
 
 const getBookings = async () => {
+  if (sql) {
+    await ensureDatabase();
+    const rows = await sql`SELECT booking_data FROM quickstay_bookings ORDER BY created_at`;
+    return rows.map((row) => row.booking_data);
+  }
   try {
     const contents = await readFile(bookingsPath, "utf8");
     const bookings = JSON.parse(contents);
@@ -78,6 +127,14 @@ const getBookings = async () => {
 };
 
 const getSubscribers = async () => {
+  if (sql) {
+    await ensureDatabase();
+    const rows = await sql`SELECT email, subscribed_at FROM quickstay_subscribers ORDER BY subscribed_at`;
+    return rows.map((row) => ({
+      email: row.email,
+      subscribedAt: new Date(row.subscribed_at).toISOString(),
+    }));
+  }
   try {
     const contents = await readFile(subscribersPath, "utf8");
     const subscribers = JSON.parse(contents);
@@ -92,6 +149,11 @@ const getSubscribers = async () => {
 };
 
 const getRooms = async () => {
+  if (sql) {
+    await ensureDatabase();
+    const rows = await sql`SELECT room_data FROM quickstay_rooms ORDER BY position, id`;
+    return rows.map((row) => row.room_data);
+  }
   if (!roomInitialization) {
     roomInitialization = (async () => {
       try {
@@ -119,6 +181,27 @@ const getRooms = async () => {
 };
 
 const saveRooms = (update) => {
+  if (sql) {
+    const operation = roomWriteQueue.then(async () => {
+      await ensureDatabase();
+      const currentRooms = await getRooms();
+      const nextRooms = await update(currentRooms);
+      const statements = [
+        sql`DELETE FROM quickstay_rooms`,
+        ...nextRooms.map(
+          (room, position) =>
+            sql`INSERT INTO quickstay_rooms (id, position, room_data)
+              VALUES (${room._id}, ${position}, ${JSON.stringify(room)}::jsonb)`,
+        ),
+      ];
+      await sql.transaction(statements);
+      return nextRooms;
+    });
+    roomWriteQueue = operation.catch((error) => {
+      console.error("Failed to persist room changes.", error);
+    });
+    return operation;
+  }
   const operation = roomWriteQueue.then(async () => {
     const rooms = await getRooms();
     const nextRooms = await update(rooms);
@@ -250,6 +333,14 @@ const parseRoomPayload = (payload, { partial = false } = {}) => {
 };
 
 const saveNewsletterSubscriber = (email) => {
+  if (sql) {
+    return (async () => {
+      await ensureDatabase();
+      const inserted = await sql`INSERT INTO quickstay_subscribers (email)
+        VALUES (${email}) ON CONFLICT (email) DO NOTHING RETURNING email`;
+      return inserted.length > 0;
+    })();
+  }
   const operation = subscriberWriteQueue.then(async () => {
     const subscribers = await getSubscribers();
     if (subscribers.some((subscriber) => subscriber.email === email)) {
@@ -277,6 +368,43 @@ const saveNewsletterSubscriber = (email) => {
 };
 
 const savePaidBooking = (session) => {
+  if (sql) {
+    return (async () => {
+      await ensureDatabase();
+      const metadata = session.metadata || {};
+      const offer = metadata.offerId ? offerCatalog[metadata.offerId] : null;
+      const booking = {
+        checkoutSessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        roomId: metadata.roomId,
+        hotelName: metadata.hotelName,
+        roomType: metadata.roomType,
+        checkIn: metadata.checkIn,
+        checkOut: metadata.checkOut,
+        guests: Number(metadata.guests),
+        nights: Number(metadata.nights),
+        totalPrice: session.amount_total / 100,
+        originalPrice: Number(metadata.originalTotalCents) / 100,
+        discountAmount:
+          (Number(metadata.originalTotalCents) - session.amount_total) / 100,
+        offerId: offer ? metadata.offerId : null,
+        offerTitle: offer?.title ?? null,
+        discountPercent: offer?.priceOff ?? 0,
+        currency: session.currency,
+        status: "paid",
+        paidAt: new Date().toISOString(),
+      };
+      const inserted = await sql`INSERT INTO quickstay_bookings
+        (checkout_session_id, booking_data)
+        VALUES (${session.id}, ${JSON.stringify(booking)}::jsonb)
+        ON CONFLICT (checkout_session_id) DO NOTHING
+        RETURNING booking_data`;
+      if (inserted.length > 0) return inserted[0].booking_data;
+      const existing = await sql`SELECT booking_data FROM quickstay_bookings
+        WHERE checkout_session_id = ${session.id}`;
+      return existing[0].booking_data;
+    })();
+  }
   const operation = bookingWriteQueue.then(async () => {
     const bookings = await getBookings();
     if (bookings.some((booking) => booking.checkoutSessionId === session.id)) {
@@ -330,7 +458,7 @@ const parseDate = (value) => {
 };
 
 const isAllowedOrigin = (origin) => {
-  if (!origin || origin === publicAppUrl) return true;
+  if (!origin || origin === publicAppOrigin) return true;
   if (process.env.NODE_ENV === "production") return false;
 
   try {
@@ -648,7 +776,31 @@ const readJsonRequest = async (request, response, message) => {
   }
 };
 
-const server = createServer(async (request, response) => {
+export const handleRequest = async (request, response) => {
+  const origin = request.headers.origin;
+  if (origin && isAllowedOrigin(origin)) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Vary", "Origin");
+    response.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization",
+    );
+    response.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PATCH, DELETE, OPTIONS",
+    );
+  }
+
+  if (request.method === "OPTIONS") {
+    if (!isAllowedOrigin(origin)) {
+      sendJson(response, 403, { error: "This request is not allowed." });
+      return;
+    }
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
 
   if (request.method === "GET" && url.pathname === "/api/rooms") {
@@ -814,18 +966,21 @@ const server = createServer(async (request, response) => {
   }
 
   sendJson(response, 404, { error: "API route not found." });
-});
+};
 
-server.listen(port, () => {
-  console.log(`QuickStay payment API listening on http://localhost:${port}`);
-  if (!stripe) {
-    console.warn(
-      "Stripe test payments are not configured. Add an sk_test_ key to .env; live keys are disabled for the sample catalog.",
-    );
-  }
-});
+if (process.env.VERCEL !== "1") {
+  const server = createServer(handleRequest);
+  server.listen(port, () => {
+    console.log(`QuickStay payment API listening on http://localhost:${port}`);
+    if (!stripe) {
+      console.warn(
+        "Stripe test payments are not configured. Add an sk_test_ key to .env; live keys are disabled for the sample catalog.",
+      );
+    }
+  });
 
-server.on("error", (error) => {
-  console.error("QuickStay payment API failed to start.", error);
-  process.exitCode = 1;
-});
+  server.on("error", (error) => {
+    console.error("QuickStay payment API failed to start.", error);
+    process.exitCode = 1;
+  });
+}

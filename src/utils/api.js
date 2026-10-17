@@ -1,5 +1,11 @@
+const apiBaseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+
 export const isStaticDemo =
-  import.meta.env.PROD && import.meta.env.BASE_URL === "/Hotel-Booking/";
+  import.meta.env.PROD &&
+  import.meta.env.BASE_URL === "/Hotel-Booking/" &&
+  !apiBaseUrl;
+
+export const apiUrl = (path) => `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
 export const readApiResponse = async (response) => {
   const contentType = response.headers.get("content-type") || "";

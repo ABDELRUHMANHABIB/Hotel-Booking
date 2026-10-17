@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { exclusiveOffers } from "../assets/assets";
-import { readApiResponse } from "../utils/api";
+import { apiUrl, readApiResponse } from "../utils/api";
 import { fetchRooms } from "../utils/rooms";
 
 const getLocalDateString = (date = new Date()) => {
@@ -79,7 +79,7 @@ function OfferDetails() {
 
     setIsBooking(true);
     try {
-      const response = await fetch("/api/create-checkout-session", {
+      const response = await fetch(apiUrl("/api/create-checkout-session"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

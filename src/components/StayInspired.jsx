@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { readApiResponse } from "../utils/api";
+import { apiUrl, readApiResponse } from "../utils/api";
 
 function StayInspired() {
   const [email, setEmail] = useState("");
@@ -14,7 +14,7 @@ function StayInspired() {
     setIsError(false);
 
     try {
-      const response = await fetch("/api/newsletter/subscribe", {
+      const response = await fetch(apiUrl("/api/newsletter/subscribe"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

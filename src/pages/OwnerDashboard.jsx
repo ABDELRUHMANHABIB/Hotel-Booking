@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth, useClerk, useUser, UserButton } from "@clerk/react";
 import { assets, roomImages } from "../assets/assets";
-import { readApiResponse } from "../utils/api";
+import { apiUrl, readApiResponse } from "../utils/api";
 import { toRoomViewModel } from "../utils/rooms";
 
 const amenityOptions = [
@@ -78,7 +78,7 @@ function OwnerDashboard() {
     async (url, options = {}) => {
       const token = await getToken();
       if (!token) throw new Error("Your session has expired. Please sign in again.");
-      const response = await fetch(url, {
+      const response = await fetch(apiUrl(url), {
         ...options,
         headers: {
           ...(options.body && { "Content-Type": "application/json" }),
