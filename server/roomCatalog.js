@@ -1,0 +1,38 @@
+export const roomCatalog = {
+  "67f7647c197ac559e4089b96": {
+    hotelName: "Urbanza Suites",
+    roomType: "Double Bed",
+    pricePerNight: 399,
+    city: "New York",
+    address: "Main Road 123 Street, 23 Colony",
+    imageIndex: 0,
+    amenities: ["Room Service", "Mountain View", "Pool Access"],
+  },
+  "67f76452197ac559e4089b8e": {
+    hotelName: "Urbanza Suites",
+    roomType: "Double Bed",
+    pricePerNight: 299,
+    city: "New York",
+    address: "Main Road 123 Street, 23 Colony",
+    imageIndex: 1,
+    amenities: ["Room Service", "Mountain View", "Pool Access"],
+  },
+  "67f76406197ac559e4089b82": {
+    hotelName: "Urbanza Suites",
+    roomType: "Double Bed",
+    pricePerNight: 249,
+    city: "New York",
+    address: "Main Road 123 Street, 23 Colony",
+    imageIndex: 2,
+    amenities: ["Free WiFi", "Free Breakfast", "Room Service"],
+  },
+  "67f763d8197ac559e4089b7a": {
+    hotelName: "Urbanza Suites",
+    roomType: "Single Bed",
+    pricePerNight: 199,
+    city: "New York",
+    address: "Main Road 123 Street, 23 Colony",
+    imageIndex: 3,
+    amenities: ["Free WiFi", "Room Service", "Pool Access"],
+  },
+};
