@@ -3,7 +3,23 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/rooms",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/rooms/:roomId",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/offers/:offerId",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/booking/:result",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/owner",
       "destination": "/index.html"
     }
   ]
