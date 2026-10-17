@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { readApiResponse } from "../utils/api";
 
 function StayInspired() {
   const [email, setEmail] = useState("");
@@ -18,11 +19,7 @@ function StayInspired() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "We couldn't save your subscription.");
-      }
+      const result = await readApiResponse(response);
 
       setMessage(
         result.alreadySubscribed

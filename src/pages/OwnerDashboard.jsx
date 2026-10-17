@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth, useClerk, useUser, UserButton } from "@clerk/react";
 import { assets, roomImages } from "../assets/assets";
+import { readApiResponse } from "../utils/api";
 import { toRoomViewModel } from "../utils/rooms";
 
 const amenityOptions = [
@@ -85,11 +86,7 @@ function OwnerDashboard() {
           Authorization: `Bearer ${token}`,
         },
       });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || "The request could not be completed.");
-      }
-      return result;
+      return readApiResponse(response);
     },
     [getToken],
   );

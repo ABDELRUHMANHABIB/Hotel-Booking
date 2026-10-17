@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { readApiResponse } from "../utils/api";
 
 function BookingResult() {
   const [searchParams] = useSearchParams();
@@ -21,11 +22,8 @@ function BookingResult() {
       `/api/checkout-session?session_id=${encodeURIComponent(sessionId)}`,
       { signal: controller.signal },
     )
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "We couldn't verify your payment.");
-        }
+      .then(readApiResponse)
+      .then((data) => {
         setResult({ loading: false, booking: data.booking, error: "" });
       })
       .catch((error) => {

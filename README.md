@@ -33,6 +33,12 @@ saved to `server/data/subscribers.json` (ignored by Git). This records
 subscribers locally but does not send emails; connect a mailing-list provider
 before using the form for an email campaign.
 
+The GitHub Pages demo is a static frontend, so it displays the sample room
+catalog from the client assets. Checkout, newsletter subscriptions, and admin
+room management require the Node.js API and are not available on GitHub Pages.
+Deploy the API to a Node.js host and configure a production API URL before
+enabling those actions in a public demo.
+
 ## Admin room dashboard
 
 Open `/owner` and sign in with Clerk. The signed-in Clerk user must have

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { assets, facilityIcons } from "../assets/assets";
+import { readApiResponse } from "../utils/api";
 import { fetchRooms } from "../utils/rooms";
 
 const getLocalDateString = (date = new Date()) => {
@@ -99,11 +100,7 @@ function RoomDetails() {
           guests: Number(guests),
         }),
       });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Couldn't start secure checkout.");
-      }
+      const result = await readApiResponse(response);
 
       window.location.assign(result.checkoutUrl);
     } catch (error) {
