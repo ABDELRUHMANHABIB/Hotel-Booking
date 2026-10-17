@@ -8,12 +8,10 @@ import { ClerkProvider } from '@clerk/react'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
         <App />
       </BrowserRouter>
     </ClerkProvider>
   </StrictMode>,
 )
-
-
 
